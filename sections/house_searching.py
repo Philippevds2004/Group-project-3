@@ -3,7 +3,7 @@ import re
 import pandas as pd
 import numpy as np
 
-data = pd.read_csv("dummyData.csv")
+data = pd.read_parquet("FinalData.parquet")
 pubData = pd.read_csv("pubData.csv")
 wardScore = pd.read_csv("wardScore.csv")
 pubList = pubData['pub_name_ward'].tolist()
