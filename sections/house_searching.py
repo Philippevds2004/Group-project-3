@@ -5,8 +5,9 @@ import numpy as np
 
 data = pd.read_csv("dummyData.csv")
 pubData = pd.read_csv("pubData.csv")
-#wardScore = pd.read_csv("wardScore.csv")
+wardScore = pd.read_csv("wardScore.csv")
 pubList = pubData['pub_name_ward'].tolist()
+wardToLsoa = pd.read_csv("LsoaToWard.csv")
 
 
 londonBoroughs = [
@@ -18,6 +19,15 @@ londonBoroughs = [
     "Richmond upon Thames", "Southwark", "Sutton", "Tower Hamlets", "Waltham Forest", 
     "Wandsworth", "Westminster"
 ]
+column_mapping = {
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "price": "Property Price",
+    "dateOfTransfer": "Transaction Date",
+    "borough": "Borough",
+    "houseType": "House Type",
+    "numberOfBedrooms": "Bedrooms"
+}
 
 def pSearch(hLong, hLat, pLong, pLat):
 
@@ -30,6 +40,63 @@ def pSearch(hLong, hLat, pLong, pLat):
     else:
         return False
     
+def getWardScore(wardScores, lsoa):
+    if st.session_state['greenSpaceCheck'] == False:
+        G = 0
+    else:
+        G = st.session_state['greenSpace']
+
+    if st.session_state['healthCheck'] == False:
+        H = 0
+    else:
+        H = st.session_state['health']
+
+    if st.session_state['educationCheck'] == False:
+        E = 0
+    else:
+        E = st.session_state['education']
+
+    if st.session_state['safetyCheck'] == False:
+        S = 0
+    else:
+        S = st.session_state['safety']
+
+    if st.session_state['transportCheck'] == False:
+        T = 0
+    else:
+        T = st.session_state['transport']
+
+    # Try to find the corresponding ward for the given LSOA
+    ward_match = wardToLsoa.loc[wardToLsoa["LSOA21CD"] == lsoa, "Formatted_Ward"]
+
+    if ward_match.empty:
+        st.write(f"⚠ No matching ward found for LSOA: {lsoa}")
+        return 0  # Default score if LSOA isn't found
+
+    ward = ward_match.iloc[0]
+    st.write(f"✅ Found ward: {ward} for LSOA: {lsoa}")
+
+    columns = ["Green_Space_Score", "Health_Score", "Education_Score", "Safety_Score", "Transport_Score"]
+    
+    # Try to find scores for the ward
+    scores = wardScores.loc[wardScores["Ward name"] == ward, columns]
+
+    if scores.empty:
+        st.write(f"⚠ No scores found for ward: {ward}")
+        return 0  # Default score if no data exists for the ward
+
+    scores = scores.values.flatten().tolist()
+    st.write(f"🏆 Scores for {ward}: {scores}")
+
+    totScore = scores[0] * G + scores[1] * H + scores[2] * E + scores[3] * S + scores[4] * T
+    st.write(f"🎯 Computed Score for {ward}: {totScore}")
+
+    return totScore
+
+    
+
+
+
 def show():
     st.title("🔍 House Searching")
     st.write("This section will help you search for houses based on different criteria.")
@@ -70,11 +137,12 @@ def show():
     if 'beer' not in st.session_state:
         st.session_state['beer'] = 5
 
-
+    st.write(getWardScore(wardScore, "E01000032"))
     col1, col2 = st.columns([1, 2])
     with col1:
+        
         st.markdown("### Search Criteria")
-        postcode = st.text_input("Outward Postcode:")
+        postcode = st.text_input("Postcode:")
         borough = st.selectbox("Borough:", londonBoroughs)
         houseType = st.selectbox("House Type:", ["Show All", "All", "Flat", "Detached", "Semi Detached", "Not Detached"])
         numBedrooms = st.slider("Number of Bedrooms:", min_value=1, max_value=10, value=1, step=1)
@@ -161,10 +229,17 @@ def show():
 
 
         elif not st.session_state['filteredData'].empty:
+            if "lsoaCode" in st.session_state['filteredData'].columns:
+                st.session_state['filteredData']["Ward Score"] = st.session_state['filteredData']["lsoaCode"].apply(
+                    lambda lsoa: getWardScore(wardScore, lsoa) if pd.notna(lsoa) else None
+                )
+            else:
+                st.write("big error")
             displayType = st.radio("Display Type:", ["Table", "Map"], horizontal=True, help="Choose how to display your results")
 
             if displayType == "Table":
-                st.dataframe(st.session_state['filteredData'], height=410)
+                displayData = st.session_state['filteredData'].rename(columns=column_mapping)
+                st.dataframe(displayData, height=410)
             else:
                 mapData = st.session_state['filteredData'].dropna(subset=["latitude", "longitude"])
                 if not mapData.empty:
