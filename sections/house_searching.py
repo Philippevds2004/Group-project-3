@@ -8,7 +8,9 @@ pubData = pd.read_csv("pubData.csv")
 wardScore = pd.read_csv("wardScore.csv")
 pubList = pubData['pub_name_ward'].tolist()
 wardToLsoa = pd.read_csv("LsoaToWard.csv")
-
+DEBUG = False
+maxPrice = data['price'].max()
+minPrice = data['price'].min()
 
 londonBoroughs = [
     "Show All", "Barking and Dagenham", "Barnet", "Bexley", "Brent", "Bromley", 
@@ -70,11 +72,11 @@ def getWardScore(wardScores, lsoa):
     ward_match = wardToLsoa.loc[wardToLsoa["LSOA21CD"] == lsoa, "Formatted_Ward"]
 
     if ward_match.empty:
-        st.write(f"⚠ No matching ward found for LSOA: {lsoa}")
+        st.write(f"⚠ No matching ward found for LSOA: {lsoa}") if DEBUG else None
         return 0  # Default score if LSOA isn't found
 
     ward = ward_match.iloc[0]
-    st.write(f"✅ Found ward: {ward} for LSOA: {lsoa}")
+    st.write(f"✅ Found ward: {ward} for LSOA: {lsoa}") if DEBUG else None
 
     columns = ["Green_Space_Score", "Health_Score", "Education_Score", "Safety_Score", "Transport_Score"]
     
@@ -82,14 +84,14 @@ def getWardScore(wardScores, lsoa):
     scores = wardScores.loc[wardScores["Ward name"] == ward, columns]
 
     if scores.empty:
-        st.write(f"⚠ No scores found for ward: {ward}")
+        st.write(f"⚠ No scores found for ward: {ward}") if DEBUG else None
         return 0  # Default score if no data exists for the ward
 
     scores = scores.values.flatten().tolist()
-    st.write(f"🏆 Scores for {ward}: {scores}")
+    st.write(f"🏆 Scores for {ward}: {scores}") if DEBUG else None
 
     totScore = scores[0] * G + scores[1] * H + scores[2] * E + scores[3] * S + scores[4] * T
-    st.write(f"🎯 Computed Score for {ward}: {totScore}")
+    st.write(f"🎯 Computed Score for {ward}: {totScore}") if DEBUG else None
 
     return totScore
 
@@ -98,9 +100,12 @@ def getWardScore(wardScores, lsoa):
 
 
 def show():
+    maxPrice = data['price'].max()
+    minPrice = data['price'].min()
     st.title("🔍 House Searching")
     st.write("This section will help you search for houses based on different criteria.")
-
+    st.write(data.head()) if DEBUG else None
+    st.write(data["house_Type"].unique()) if DEBUG else None
     if 'filteredData' not in st.session_state:
         st.session_state['filteredData'] = pd.DataFrame()
 
@@ -137,16 +142,16 @@ def show():
     if 'beer' not in st.session_state:
         st.session_state['beer'] = 5
 
-    st.write(getWardScore(wardScore, "E01000032"))
+    st.write(getWardScore(wardScore, "E01000032")) if DEBUG else None
     col1, col2 = st.columns([1, 2])
     with col1:
         
         st.markdown("### Search Criteria")
         postcode = st.text_input("Postcode:")
         borough = st.selectbox("Borough:", londonBoroughs)
-        houseType = st.selectbox("House Type:", ["Show All", "All", "Flat", "Detached", "Semi Detached", "Not Detached"])
+        houseType = st.selectbox("House Type:", ["Show All", "F", "T", "S", "O", "D"])
         numBedrooms = st.slider("Number of Bedrooms:", min_value=1, max_value=10, value=1, step=1)
-        maxPrice = st.slider("Maximum Price:", min_value=50000, max_value=2000000, value=500000, step=50000)
+        maxPrice = st.slider("Maximum Price:", min_value=int(minPrice), max_value=int(maxPrice), value=1000000, step=50000)
         col1a, col1b = st.columns(2)
         with col1a:
             if st.button("Advanced"):
@@ -156,16 +161,29 @@ def show():
             if st.button("Search"):
                 st.session_state['advancedShow'] = False
                 filteredData = data.copy()
+                st.write(f"Before postcode filter: {len(filteredData)} rows") if DEBUG else None
+
                 if postcode:
                     filteredData = filteredData[filteredData["postcode"].str.contains(postcode, na=False, case=False)]
+                st.write(f"After postcode filter: {len(filteredData)} rows") if DEBUG else None
+
                 if numBedrooms:
                     filteredData = filteredData[filteredData["numberOfBedrooms"] == numBedrooms]
+                st.write(f"After bedroom filter: {len(filteredData)} rows") if DEBUG else None
+
                 if maxPrice:
                     filteredData = filteredData[filteredData["price"] <= maxPrice]
+                st.write(f"After price filter: {len(filteredData)} rows") if DEBUG else None
+
                 if houseType != "Show All":
-                    filteredData = filteredData[filteredData["houseType"] == houseType]
+                    filteredData = filteredData[filteredData["house_Type"] == houseType]
+                st.write(filteredData["house_Type"].unique()) if DEBUG else None
+                st.write(f"After house type filter: {len(filteredData)} rows") if DEBUG else None
+
                 if borough != "Show All":
-                    filteredData = filteredData[filteredData["borough"] == borough]
+                    filteredData = filteredData[filteredData["borough"] == borough.upper()]
+                st.write(f"After borough filter: {len(filteredData)} rows") if DEBUG else None
+
                 if st.session_state['beerCheck']:
                     pubLong = pubData.loc[pubData['pub_name_ward'] == st.session_state['beer'], 'longitude']
                     pubLat = pubData.loc[pubData['pub_name_ward'] == st.session_state['beer'], 'latitude']
@@ -175,7 +193,7 @@ def show():
                             axis=1
                         )
                     ]
-
+                st.write(f"After beer filter: {len(filteredData)} rows") if DEBUG else None
 
                 filteredData = filteredData.sort_values(by="price", ascending=False).head(10)
                 st.session_state['filteredData'] = filteredData
@@ -234,7 +252,7 @@ def show():
                     lambda lsoa: getWardScore(wardScore, lsoa) if pd.notna(lsoa) else None
                 )
             else:
-                st.write("big error")
+                st.write("big error") if DEBUG else None
             displayType = st.radio("Display Type:", ["Table", "Map"], horizontal=True, help="Choose how to display your results")
 
             if displayType == "Table":
